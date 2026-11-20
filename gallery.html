@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>돌 조각하기 - 내 돌 보관함</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    background: #fff;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px;
+    border-bottom: 1px solid #e8eaed;
+  }
+  header .home {
+    text-decoration: none;
+    font-size: 20px;
+    font-weight: 500;
+    color: #202124;
+  }
+  header .home span { color: #4285f4; }
+  header .right a {
+    color: #1a73e8;
+    text-decoration: none;
+    font-size: 14px;
+    padding: 8px 14px;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+  }
+  header .right a:hover { background: #f8f9fa; }
+
+  main { flex: 1; padding: 32px 24px; max-width: 1100px; width: 100%; margin: 0 auto; }
+  h1 { font-size: 24px; font-weight: 500; margin-bottom: 4px; }
+  .sub { font-size: 14px; color: #5f6368; margin-bottom: 28px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 20px;
+  }
+  .card {
+    border: 1px solid #e8eaed;
+    border-radius: 10px;
+    overflow: hidden;
+    transition: box-shadow .15s;
+    background: #fff;
+  }
+  .card:hover { box-shadow: 0 2px 10px rgba(60,64,67,.18); }
+  .card .thumb {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    display: block;
+    background: #f8f9fa;
+    cursor: pointer;
+  }
+  .card .info { padding: 12px 14px; }
+  .card .name { font-size: 15px; font-weight: 500; color: #202124; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .meta { font-size: 12px; color: #80868b; margin-bottom: 10px; }
+  .card .actions { display: flex; gap: 6px; }
+  .card .actions button, .card .actions a {
+    flex: 1;
+    text-align: center;
+    font-size: 13px;
+    padding: 7px 4px;
+    border-radius: 5px;
+    border: 1px solid #dadce0;
+    background: #fff;
+    cursor: pointer;
+    text-decoration: none;
+    color: #1a73e8;
+  }
+  .card .actions a:hover, .card .actions button:hover { background: #f1f3f4; }
+  .card .actions .del { color: #d93025; flex: 0 0 auto; padding: 7px 10px; }
+  .card .actions .del:hover { background: #fce8e6; }
+
+  .empty {
+    text-align: center;
+    padding: 80px 20px;
+    color: #5f6368;
+  }
+  .empty .big { font-size: 56px; margin-bottom: 16px; }
+  .empty a {
+    display: inline-block;
+    margin-top: 18px;
+    background: #1a73e8;
+    color: #fff;
+    text-decoration: none;
+    padding: 11px 26px;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  .empty a:hover { background: #1765cc; }
+
+  /* 3D 미리보기 모달 */
+  .viewer-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.5);
+    justify-content: center; align-items: center;
+    z-index: 10;
+  }
+  .viewer-overlay.open { display: flex; }
+  .viewer {
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0,0,0,.3);
+    width: min(640px, 94vw);
+  }
+  .viewer .bar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 18px;
+    border-bottom: 1px solid #e8eaed;
+  }
+  .viewer .bar .title { font-size: 16px; font-weight: 500; }
+  .viewer .bar button {
+    background: none; border: none; font-size: 18px; cursor: pointer; color: #5f6368;
+  }
+  #viewerCanvasWrap { width: 100%; height: min(460px, 60vh); }
+  #viewerCanvasWrap canvas { display: block; touch-action: none; cursor: grab; }
+  .viewer .foot { padding: 10px 18px; font-size: 12px; color: #80868b; text-align: center; }
+</style>
+</head>
+<body>
+  <header>
+    <a class="home" href="index.html">🪨 <span>돌</span> 조각하기</a>
+    <div class="right"><a href="carve.html">🔨 새로 조각하기</a></div>
+  </header>
+
+  <main>
+    <h1>🗂 내 돌 보관함</h1>
+    <p class="sub" id="countLabel"></p>
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty" style="display:none">
+      <div class="big">🪨</div>
+      아직 저장된 돌이 없어요.<br />첫 조각을 시작해 보세요!
+      <br /><a href="carve.html">🔨 돌 조각하러 가기</a>
+    </div>
+  </main>
+
+  <!-- 3D 미리보기 -->
+  <div class="viewer-overlay" id="viewerOverlay">
+    <div class="viewer">
+      <div class="bar">
+        <span class="title" id="viewerTitle"></span>
+        <button id="viewerClose">✕</button>
+      </div>
+      <div id="viewerCanvasWrap"></div>
+      <div class="foot">드래그로 360° 회전 · 휠로 확대/축소 · 자동 회전 중</div>
+    </div>
+  </div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { MarchingCubes } from 'three/addons/objects/MarchingCubes.js';
+import { listStones, getStone, deleteStone } from './db.js';
+
+const grid = document.getElementById('grid');
+const empty = document.getElementById('empty');
+const countLabel = document.getElementById('countLabel');
+
+function fmtDate(ts) {
+  const d = new Date(ts);
+  return d.getFullYear() + '. ' + (d.getMonth() + 1) + '. ' + d.getDate() + '. ' +
+    String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+async function render() {
+  const stones = await listStones();
+  grid.innerHTML = '';
+  empty.style.display = stones.length ? 'none' : 'block';
+  countLabel.textContent = stones.length
+    ? '저장된 작품 ' + stones.length + '개 · 썸네일을 누르면 3D로 볼 수 있어요'
+    : '';
+
+  for (const s of stones) {
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    const img = document.createElement('img');
+    img.className = 'thumb';
+    img.src = s.thumb;
+    img.alt = s.name;
+    img.title = '3D로 보기';
+    img.addEventListener('click', () => openViewer(s.id));
+
+    const info = document.createElement('div');
+    info.className = 'info';
+
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = s.name;
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.textContent = s.owner + ' · ' + fmtDate(s.updatedAt);
+
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+
+    const view = document.createElement('button');
+    view.textContent = '🔍 3D 보기';
+    view.addEventListener('click', () => openViewer(s.id));
+
+    const edit = document.createElement('a');
+    edit.href = 'carve.html?load=' + s.id;
+    edit.textContent = '⛏️ 이어 조각';
+
+    const del = document.createElement('button');
+    del.className = 'del';
+    del.textContent = '🗑';
+    del.title = '삭제';
+    del.addEventListener('click', async () => {
+      if (!confirm('「' + s.name + '」을(를) 삭제할까요?')) return;
+      await deleteStone(s.id);
+      render();
+    });
+
+    actions.append(view, edit, del);
+    info.append(name, meta, actions);
+    card.append(img, info);
+    grid.append(card);
+  }
+}
+
+/* ---------- 3D 미리보기 ---------- */
+const overlay = document.getElementById('viewerOverlay');
+const vWrap = document.getElementById('viewerCanvasWrap');
+let vRenderer = null, vScene, vCamera, vControls, vEffect, vRunning = false;
+
+function initViewer() {
+  vScene = new THREE.Scene();
+  vScene.background = new THREE.Color(0xf8f9fa);
+  vCamera = new THREE.PerspectiveCamera(45, vWrap.clientWidth / vWrap.clientHeight, 0.1, 100);
+  vCamera.position.set(0, 0.6, 4.2);
+
+  vRenderer = new THREE.WebGLRenderer({ antialias: true });
+  vRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  vRenderer.setSize(vWrap.clientWidth, vWrap.clientHeight);
+  vWrap.appendChild(vRenderer.domElement);
+
+  vScene.add(new THREE.HemisphereLight(0xffffff, 0x888899, 1.1));
+  const dir = new THREE.DirectionalLight(0xffffff, 1.6);
+  dir.position.set(3, 5, 4);
+  vScene.add(dir);
+  const fill = new THREE.DirectionalLight(0xaabbff, 0.4);
+  fill.position.set(-4, -2, -3);
+  vScene.add(fill);
+
+  vControls = new OrbitControls(vCamera, vRenderer.domElement);
+  vControls.enableDamping = true;
+  vControls.autoRotate = true;
+  vControls.autoRotateSpeed = 2;
+  vControls.minDistance = 2;
+  vControls.maxDistance = 10;
+
+  const mat = new THREE.MeshStandardMaterial({ color: 0x9a9a96, roughness: 0.92, metalness: 0.02 });
+  vEffect = new MarchingCubes(64, mat, false, false, 300000);
+  vEffect.isolation = 0.6;
+  vEffect.scale.set(1.5, 1.5, 1.5);
+  vScene.add(vEffect);
+}
+
+function loop() {
+  if (!vRunning) return;
+  requestAnimationFrame(loop);
+  vControls.update();
+  vRenderer.render(vScene, vCamera);
+}
+
+async function openViewer(id) {
+  const rec = await getStone(id);
+  if (!rec) return;
+  document.getElementById('viewerTitle').textContent = '🪨 ' + rec.name;
+  overlay.classList.add('open');
+  if (!vRenderer) initViewer();
+  vRenderer.setSize(vWrap.clientWidth, vWrap.clientHeight);
+  vCamera.aspect = vWrap.clientWidth / vWrap.clientHeight;
+  vCamera.updateProjectionMatrix();
+  vEffect.field.set(new Float32Array(rec.field));
+  vEffect.update();
+  vControls.reset?.();
+  vCamera.position.set(0, 0.6, 4.2);
+  vRunning = true;
+  loop();
+}
+
+function closeViewer() {
+  vRunning = false;
+  overlay.classList.remove('open');
+}
+document.getElementById('viewerClose').addEventListener('click', closeViewer);
+overlay.addEventListener('click', e => { if (e.target === overlay) closeViewer(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeViewer(); });
+
+render();
+</script>
+</body>
+</html>

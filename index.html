@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>돌 조각하기</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    background: #fff;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  /* 상단 바 */
+  header {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 24px;
+  }
+  header a.link {
+    color: #202124;
+    text-decoration: none;
+    font-size: 14px;
+    padding: 8px 10px;
+    border-radius: 4px;
+  }
+  header a.link:hover { text-decoration: underline; }
+  .btn-signin {
+    background: #1a73e8;
+    color: #fff !important;
+    font-size: 14px;
+    padding: 9px 18px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .btn-signin:hover { background: #1765cc; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  #userInfo { font-size: 14px; color: #5f6368; display: none; align-items: center; gap: 10px; }
+  #userInfo button {
+    background: none; border: 1px solid #dadce0; border-radius: 4px;
+    padding: 7px 14px; font-size: 13px; cursor: pointer; color: #1a73e8;
+  }
+  #userInfo button:hover { background: #f8f9fa; }
+
+  /* 중앙 영역 */
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 28px;
+    padding-bottom: 10vh;
+  }
+  .logo {
+    font-size: 64px;
+    font-weight: 500;
+    letter-spacing: -2px;
+    user-select: none;
+  }
+  .logo span:nth-child(1) { color: #4285f4; }
+  .logo span:nth-child(2) { color: #ea4335; }
+  .logo span:nth-child(3) { color: #fbbc05; }
+  .logo span:nth-child(4) { color: #4285f4; }
+  .logo span:nth-child(5) { color: #34a853; }
+  .logo .emoji { font-size: 56px; margin-right: 8px; }
+  .btn-row { display: flex; gap: 14px; }
+  .carve-btn {
+    background: #f8f9fa;
+    border: 1px solid #f8f9fa;
+    border-radius: 4px;
+    color: #3c4043;
+    font-size: 16px;
+    padding: 14px 32px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .carve-btn:hover {
+    box-shadow: 0 1px 3px rgba(60,64,67,.3);
+    border-color: #dadce0;
+  }
+  footer {
+    background: #f2f2f2;
+    padding: 14px 24px;
+    font-size: 13px;
+    color: #70757a;
+  }
+
+  /* 모달 */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.4);
+    justify-content: center; align-items: center;
+    z-index: 10;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: #fff;
+    border-radius: 8px;
+    padding: 40px 36px;
+    width: 360px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.25);
+  }
+  .modal h2 { font-size: 22px; font-weight: 500; margin-bottom: 6px; text-align: center; }
+  .modal p.sub { font-size: 14px; color: #5f6368; text-align: center; margin-bottom: 24px; }
+  .modal input {
+    width: 100%;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    font-size: 15px;
+    outline: none;
+  }
+  .modal input:focus { border-color: #1a73e8; box-shadow: 0 0 0 1px #1a73e8; }
+  .modal .error { color: #d93025; font-size: 13px; min-height: 18px; margin-bottom: 8px; }
+  .modal-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+  .modal-actions .switch { background: none; border: none; color: #1a73e8; font-size: 14px; cursor: pointer; padding: 8px; }
+  .modal-actions .submit {
+    background: #1a73e8; color: #fff; border: none; border-radius: 4px;
+    padding: 10px 24px; font-size: 14px; font-weight: 500; cursor: pointer;
+  }
+  .modal-actions .submit:hover { background: #1765cc; }
+  .modal .close {
+    float: right; background: none; border: none; font-size: 20px;
+    cursor: pointer; color: #5f6368; margin: -24px -20px 0 0;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div id="authLinks">
+      <a href="#" class="link" onclick="openModal('signup');return false;">회원가입</a>
+      <a href="#" class="btn-signin" onclick="openModal('login');return false;">로그인</a>
+    </div>
+    <div id="userInfo">
+      <span id="welcome"></span>
+      <button onclick="logout()">로그아웃</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="logo"><span class="emoji">🪨</span><span>돌</span><span> </span><span>조</span><span>각</span><span>하기</span></div>
+    <div class="btn-row">
+      <button class="carve-btn" onclick="location.href='carve.html'">🔨 돌 조각하기</button>
+      <button class="carve-btn" onclick="location.href='gallery.html'">🗂 내 돌 보관함</button>
+    </div>
+  </main>
+
+  <footer>대한민국 · 돌 조각하기</footer>
+
+  <!-- 로그인/회원가입 모달 -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <button class="close" onclick="closeModal()">✕</button>
+      <h2 id="modalTitle">로그인</h2>
+      <p class="sub">돌 조각하기 계정 사용</p>
+      <input type="text" id="username" placeholder="아이디" autocomplete="username" />
+      <input type="password" id="password" placeholder="비밀번호" autocomplete="current-password" />
+      <div class="error" id="errorMsg"></div>
+      <div class="modal-actions">
+        <button class="switch" id="switchBtn" onclick="switchMode()">계정 만들기</button>
+        <button class="submit" id="submitBtn" onclick="submitAuth()">로그인</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  let mode = 'login';
+
+  function openModal(m) {
+    mode = m;
+    updateModalText();
+    document.getElementById('errorMsg').textContent = '';
+    document.getElementById('username').value = '';
+    document.getElementById('password').value = '';
+    document.getElementById('modalOverlay').classList.add('open');
+    document.getElementById('username').focus();
+  }
+  function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('open');
+  }
+  function switchMode() {
+    mode = mode === 'login' ? 'signup' : 'login';
+    updateModalText();
+    document.getElementById('errorMsg').textContent = '';
+  }
+  function updateModalText() {
+    const isLogin = mode === 'login';
+    document.getElementById('modalTitle').textContent = isLogin ? '로그인' : '회원가입';
+    document.getElementById('submitBtn').textContent = isLogin ? '로그인' : '가입하기';
+    document.getElementById('switchBtn').textContent = isLogin ? '계정 만들기' : '이미 계정이 있나요?';
+  }
+
+  function getUsers() {
+    try { return JSON.parse(localStorage.getItem('users') || '{}'); }
+    catch { return {}; }
+  }
+
+  function submitAuth() {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const err = document.getElementById('errorMsg');
+    if (!username || !password) { err.textContent = '아이디와 비밀번호를 입력하세요.'; return; }
+
+    const users = getUsers();
+    if (mode === 'signup') {
+      if (users[username]) { err.textContent = '이미 존재하는 아이디입니다.'; return; }
+      users[username] = password;
+      localStorage.setItem('users', JSON.stringify(users));
+      localStorage.setItem('currentUser', username);
+    } else {
+      if (!users[username] || users[username] !== password) {
+        err.textContent = '아이디 또는 비밀번호가 올바르지 않습니다.'; return;
+      }
+      localStorage.setItem('currentUser', username);
+    }
+    closeModal();
+    renderAuthState();
+  }
+
+  function logout() {
+    localStorage.removeItem('currentUser');
+    renderAuthState();
+  }
+
+  function renderAuthState() {
+    const user = localStorage.getItem('currentUser');
+    document.getElementById('authLinks').style.display = user ? 'none' : 'block';
+    const info = document.getElementById('userInfo');
+    info.style.display = user ? 'flex' : 'none';
+    if (user) document.getElementById('welcome').textContent = user + '님 환영합니다';
+  }
+
+  document.getElementById('modalOverlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeModal();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeModal();
+    if (e.key === 'Enter' && document.getElementById('modalOverlay').classList.contains('open')) submitAuth();
+  });
+
+  renderAuthState();
+</script>
+</body>
+</html>
