@@ -244,7 +244,7 @@ async function render() {
 /* ---------- 3D 미리보기 ---------- */
 const overlay = document.getElementById('viewerOverlay');
 const vWrap = document.getElementById('viewerCanvasWrap');
-let vRenderer = null, vScene, vCamera, vControls, vEffect, vRunning = false;
+let vRenderer = null, vScene, vCamera, vControls, vEffect, vMat, vRunning = false;
 
 function initViewer() {
   vScene = new THREE.Scene();
@@ -273,7 +273,13 @@ function initViewer() {
   vControls.maxDistance = 10;
 
   const mat = new THREE.MeshStandardMaterial({ color: 0x9a9a96, roughness: 0.92, metalness: 0.02 });
-  vEffect = new MarchingCubes(64, mat, false, false, 300000);
+  vMat = mat;
+  buildEffect(64);
+}
+
+function buildEffect(res) {
+  if (vEffect) { vScene.remove(vEffect); vEffect.geometry.dispose(); }
+  vEffect = new MarchingCubes(res, vMat, false, false, res > 64 ? 700000 : 300000);
   vEffect.isolation = 0.6;
   vEffect.scale.set(1.5, 1.5, 1.5);
   vScene.add(vEffect);
@@ -295,6 +301,8 @@ async function openViewer(id) {
   vRenderer.setSize(vWrap.clientWidth, vWrap.clientHeight);
   vCamera.aspect = vWrap.clientWidth / vWrap.clientHeight;
   vCamera.updateProjectionMatrix();
+  const res = rec.res || 64;
+  if (vEffect.size !== res) buildEffect(res);
   vEffect.field.set(new Float32Array(rec.field));
   vEffect.update();
   vControls.reset?.();

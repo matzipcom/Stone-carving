@@ -47,7 +47,7 @@
     border: 1px solid #e8eaed;
     border-radius: 8px;
     padding: 16px;
-    min-width: 175px;
+    min-width: 190px;
   }
   .tools h3 { font-size: 13px; color: #5f6368; font-weight: 500; margin-bottom: 4px; }
   .tool-btn {
@@ -88,6 +88,14 @@
   .action-btn.photo:hover { background: #e8f0fe; }
   .action-btn.gallery { color: #5f6368; }
   .action-btn.gallery:hover { background: #f1f3f4; }
+  .cut-panel { display: none; flex-direction: column; gap: 6px; padding: 10px; border: 1px dashed #d93025; border-radius: 6px; background: #fff; }
+  .cut-panel.open { display: flex; }
+  .cut-panel .seg { display: flex; gap: 4px; }
+  .mini { flex: 1; background: #fff; border: 1px solid #dadce0; border-radius: 6px; padding: 7px 8px; font-size: 13px; cursor: pointer; }
+  .mini:hover { background: #f1f3f4; }
+  .mini.active { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; font-weight: 500; }
+  .action-btn.confirm { background: #d93025; color: #fff; border-color: #d93025; font-weight: 500; }
+  .action-btn.confirm:hover { background: #b3261e; }
   .size-label { font-size: 12px; color: #5f6368; margin-top: 4px; }
   input[type=range] { width: 100%; }
 
@@ -101,6 +109,7 @@
   }
   .canvas-wrap canvas { display: block; touch-action: none; cursor: crosshair; }
   .canvas-wrap.rotating canvas { cursor: grab; }
+  #cutOverlay { position: absolute; inset: 0; pointer-events: none; }
   .loading {
     position: absolute; inset: 0;
     display: flex; justify-content: center; align-items: center;
@@ -141,11 +150,25 @@
       <h3>조각 도구</h3>
       <button class="tool-btn active" data-tool="chisel-small"><span class="icon">🔪</span>작은 정</button>
       <button class="tool-btn" data-tool="chisel-large"><span class="icon">⛏️</span>큰 정</button>
+      <button class="tool-btn" data-tool="chisel-fine"><span class="icon">✒️</span>세밀 정 (정교하게)</button>
+      <button class="tool-btn" data-tool="engrave"><span class="icon">🖋️</span>초정밀 조각칼 (실선)</button>
+      <button class="tool-btn" data-tool="cut"><span class="icon">✂️</span>선 긋고 자르기</button>
       <button class="tool-btn" data-tool="hammer"><span class="icon">🔨</span>망치</button>
       <button class="tool-btn" data-tool="polish"><span class="icon">🧽</span>다듬기</button>
       <button class="tool-btn" data-tool="rotate"><span class="icon">🔄</span>회전 보기</button>
+      <div class="cut-panel" id="cutPanel">
+        <h3>자르기 곡선</h3>
+        <div class="seg">
+          <button class="mini active" data-cutmode="draw">✏️ 그리기</button>
+          <button class="mini" data-cutmode="rotate">🔄 회전</button>
+        </div>
+        <button class="mini wide" id="cutFlip">↔ 잘라낼 쪽 바꾸기</button>
+        <button class="mini wide" id="cutClear">✕ 곡선 지우기</button>
+        <button class="action-btn confirm" id="cutConfirm">✂️ 자르기 (확정)</button>
+      </div>
       <div class="size-label">도구 크기</div>
-      <input type="range" id="sizeRange" min="5" max="40" value="14" />
+      <input type="range" id="sizeRange" min="1" max="40" step="0.5" value="14" />
+      <div class="size-label" id="sizeValue"></div>
       <div class="divider"></div>
       <button class="action-btn save" id="saveBtn">💾 보관함에 저장</button>
       <button class="action-btn photo" id="photoBtn">📷 사진으로 저장</button>
@@ -154,11 +177,12 @@
     </div>
 
     <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="cutOverlay"></canvas>
       <div class="loading" id="loading">3D 돌을 준비하는 중…</div>
     </div>
   </div>
 
-  <div class="hint">빈 공간을 드래그하면 360° 회전, 휠로 확대/축소 · 돌 표면을 클릭하거나 드래그하면 조각됩니다</div>
+  <div class="hint">빈 공간을 드래그하면 360° 회전, 휠로 확대/축소 · 돌 표면을 클릭하거나 드래그하면 조각됩니다 · ✂️ 자르기: 곡선을 그린 뒤 점을 끌어 수정하고(더블클릭: 점 추가/삭제) 회전해서 확인한 다음 [자르기 (확정)]을 누르세요 · 우클릭 드래그로도 회전됩니다</div>
   <div id="toast"></div>
 
 <script type="importmap">
@@ -205,11 +229,11 @@ scene.add(fillLight);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
-controls.minDistance = 2;
+controls.minDistance = 0.8;
 controls.maxDistance = 10;
 
 /* ---------- 마칭 큐브 돌 ---------- */
-const RES = 64;
+const RES = 96;
 const HALF = RES / 2;
 const stoneMat = new THREE.MeshStandardMaterial({
   color: 0x9a9a96,
@@ -217,7 +241,7 @@ const stoneMat = new THREE.MeshStandardMaterial({
   metalness: 0.02,
   flatShading: false
 });
-const effect = new MarchingCubes(RES, stoneMat, false, false, 300000);
+const effect = new MarchingCubes(RES, stoneMat, false, false, 700000);
 effect.isolation = 0.6;
 effect.scale.set(1.5, 1.5, 1.5);
 scene.add(effect);
@@ -271,12 +295,37 @@ function generateStone() {
     }
   }
   refreshMesh();
+  flushMesh();
 }
 
-function refreshMesh() {
+let meshDirty = false;
+function refreshMesh() { meshDirty = true; }
+function flushMesh() {
+  if (!meshDirty) return;
+  meshDirty = false;
   effect.update();
   effect.geometry.computeBoundingBox();
   effect.geometry.computeBoundingSphere();
+}
+
+/* 저장된 격자 해상도가 다르면 삼선형 보간으로 현재 해상도로 변환 */
+function resampleField(src, srcRes) {
+  const out = new Float32Array(RES * RES * RES);
+  const k = (srcRes / 2) / HALF;
+  const m = srcRes - 1;
+  const at = (x, y, z) => src[z * srcRes * srcRes + y * srcRes + x];
+  const l = (a, b, t) => a + (b - a) * t;
+  for (let z = 0; z < RES; z++) for (let y = 0; y < RES; y++) for (let x = 0; x < RES; x++) {
+    const sx = Math.min(x * k, m), sy = Math.min(y * k, m), sz = Math.min(z * k, m);
+    const x0 = Math.floor(sx), y0 = Math.floor(sy), z0 = Math.floor(sz);
+    const x1 = Math.min(x0 + 1, m), y1 = Math.min(y0 + 1, m), z1 = Math.min(z0 + 1, m);
+    const fx = sx - x0, fy = sy - y0, fz = sz - z0;
+    out[z * RES * RES + y * RES + x] = l(
+      l(l(at(x0, y0, z0), at(x1, y0, z0), fx), l(at(x0, y1, z0), at(x1, y1, z0), fx), fy),
+      l(l(at(x0, y0, z1), at(x1, y0, z1), fx), l(at(x0, y1, z1), at(x1, y1, z1), fx), fy),
+      fz);
+  }
+  return out;
 }
 
 /* ---------- 조각 ---------- */
@@ -287,6 +336,7 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
 function pickStone(e) {
+  flushMesh();
   const rect = renderer.domElement.getBoundingClientRect();
   pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
   pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -305,47 +355,71 @@ function worldToGrid(worldPoint) {
 }
 
 function toolRadius() {
-  const mult = tool === 'hammer' ? 1.9 : tool === 'chisel-large' ? 1.4 : 1;
-  return (toolSize / 130) * HALF * mult; // 그리드 단위 반경
+  const mult = tool === 'hammer' ? 1.9 : tool === 'chisel-large' ? 1.4 : tool === 'chisel-fine' ? 0.4 : 1;
+  const r = (toolSize / 130) * HALF * mult; // 그리드 단위 반경
+  if (tool === 'engrave') return Math.max(1.6, r * 0.45); // 복셀 1~2칸 수준의 가는 선
+  if (tool === 'chisel-fine') return Math.max(2.2, r);
+  return r;
 }
 
-/* 구형 영역을 필드에서 빼서 깎기 */
+/* 도구 궤적(캡슐)을 거리장 기준으로 한 번에 도려냄: 속도와 무관하게 매끄럽고 정확한 절단면 */
+function carveSegment(ax, ay, az, bx, by, bz) {
+  const field = effect.field;
+  const iso = effect.isolation;
+  const r = toolRadius();
+  const pad = r + 3;
+  const x0 = Math.max(1, Math.floor(Math.min(ax, bx) - pad)), x1 = Math.min(RES - 2, Math.ceil(Math.max(ax, bx) + pad));
+  const y0 = Math.max(1, Math.floor(Math.min(ay, by) - pad)), y1 = Math.min(RES - 2, Math.ceil(Math.max(ay, by) + pad));
+  const z0 = Math.max(1, Math.floor(Math.min(az, bz) - pad)), z1 = Math.min(RES - 2, Math.ceil(Math.max(az, bz) + pad));
+  const abx = bx - ax, aby = by - ay, abz = bz - az;
+  const len2 = abx * abx + aby * aby + abz * abz;
+  for (let z = z0; z <= z1; z++) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    let t = len2 > 0 ? ((x - ax) * abx + (y - ay) * aby + (z - az) * abz) / len2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const dx = x - (ax + abx * t), dy = y - (ay + aby * t), dz = z - (az + abz * t);
+    const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (d > pad) continue;
+    const target = iso + (d - r) * 0.35; // d == r 에서 정확히 표면이 생김
+    const q = z * RES * RES + y * RES + x;
+    if (target < field[q]) field[q] = target;
+  }
+  refreshMesh();
+}
+
+/* 다듬기 전용 */
 function carveAt(gx, gy, gz) {
   const field = effect.field;
   const r = toolRadius();
   const r2 = r * r;
-  const strength = tool === 'hammer' ? 5 : 3.2;
-  const jag = tool === 'polish' ? 0 : 0.6; // 들쭉날쭉함
   const x0 = Math.max(1, Math.floor(gx - r)), x1 = Math.min(RES - 2, Math.ceil(gx + r));
   const y0 = Math.max(1, Math.floor(gy - r)), y1 = Math.min(RES - 2, Math.ceil(gy + r));
   const z0 = Math.max(1, Math.floor(gz - r)), z1 = Math.min(RES - 2, Math.ceil(gz + r));
 
   if (tool === 'polish') {
-    // 다듬기: 주변 평균값과 섞어 표면을 부드럽게
-    const copy = new Float32Array(field);
+    // 다듬기: 작업 영역만 복사해 주변 평균값과 섞어 표면을 부드럽게
+    const bx0 = x0 - 1, by0 = y0 - 1, bz0 = z0 - 1;
+    const bw = x1 - x0 + 3, bh = y1 - y0 + 3, bd = z1 - z0 + 3;
+    const copy = new Float32Array(bw * bh * bd);
+    for (let z = 0; z < bd; z++) for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
+      copy[(z * bh + y) * bw + x] = field[(bz0 + z) * RES * RES + (by0 + y) * RES + bx0 + x];
+    }
     for (let z = z0; z <= z1; z++) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const dx = x - gx, dy = y - gy, dz = z - gz;
       const d2 = dx * dx + dy * dy + dz * dz;
       if (d2 > r2) continue;
-      const q = z * RES * RES + y * RES + x;
+      const c = ((z - bz0) * bh + (y - by0)) * bw + (x - bx0);
       const avg = (
-        copy[q - 1] + copy[q + 1] +
-        copy[q - RES] + copy[q + RES] +
-        copy[q - RES * RES] + copy[q + RES * RES]
+        copy[c - 1] + copy[c + 1] +
+        copy[c - bw] + copy[c + bw] +
+        copy[c - bw * bh] + copy[c + bw * bh]
       ) / 6;
+      const q = z * RES * RES + y * RES + x;
       const f = 1 - d2 / r2;
       field[q] += (avg - field[q]) * 0.6 * f;
     }
   } else {
-    for (let z = z0; z <= z1; z++) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-      const dx = x - gx, dy = y - gy, dz = z - gz;
-      const d2 = dx * dx + dy * dy + dz * dz;
-      if (d2 > r2) continue;
-      const q = z * RES * RES + y * RES + x;
-      const falloff = 1 - d2 / r2;
-      const rough = 1 + (Math.random() - 0.5) * jag;
-      field[q] -= strength * falloff * rough;
-    }
+    carveSegment(gx, gy, gz, gx, gy, gz);
+    return;
   }
   refreshMesh();
 }
@@ -354,19 +428,257 @@ function strike(e) {
   const hit = pickStone(e);
   if (!hit) return false;
   const [gx, gy, gz] = worldToGrid(hit.point);
-  if (tool === 'hammer') {
-    // 망치: 타격 지점 주변 여러 조각이 떨어져 나감
-    carveAt(gx, gy, gz);
-    for (let i = 0; i < 3; i++) {
-      const r = toolRadius();
-      carveAt(gx + (Math.random() - 0.5) * r, gy + (Math.random() - 0.5) * r, gz + (Math.random() - 0.5) * r);
-    }
-    spawnParticles(hit.point, hit.face.normal, 26);
-  } else {
-    carveAt(gx, gy, gz);
-    spawnParticles(hit.point, hit.face.normal, tool === 'polish' ? 4 : 10);
-  }
+  carveAt(gx, gy, gz);
+  spawnParticles(hit.point, hit.face.normal, tool === 'hammer' ? 8 : tool === 'chisel-small' || tool === 'chisel-large' ? 2 : 0);
   return true;
+}
+
+/* ---------- 선 긋고 자르기 (곡선, 수정 가능, 확정 시 절단) ---------- */
+const overlay = document.getElementById('cutOverlay');
+const octx = overlay.getContext('2d');
+
+function sizeOverlay() {
+  overlay.width = WIDTH();
+  overlay.height = HEIGHT();
+}
+sizeOverlay();
+
+const cut = {
+  mode: 'draw',      // draw | rotate
+  raw: null,         // 그리는 중인 3D 점들
+  pts: [],           // 편집 가능한 3D 제어점
+  flip: false,
+  drag: -1,          // 끌고 있는 제어점
+  version: 0,
+  sideKey: '',
+  autoSign: 1
+};
+
+function stoneDepth() {
+  return camera.position.distanceTo(effect.position);
+}
+
+/* 화면 좌표의 3D 점: 돌에 닿으면 표면, 아니면 돌 중심 깊이의 시선 위 */
+function worldPointAt(x, y) {
+  const hit = pickAt(x, y);
+  if (hit) return hit.point.clone();
+  raycaster.setFromCamera(new THREE.Vector2((x / WIDTH()) * 2 - 1, -(y / HEIGHT()) * 2 + 1), camera);
+  return raycaster.ray.at(stoneDepth(), new THREE.Vector3());
+}
+
+function toScreen(p) {
+  const v = p.clone().project(camera);
+  return [(v.x + 1) / 2 * WIDTH(), (1 - v.y) / 2 * HEIGHT()];
+}
+
+function curveSamples(points) {
+  if (points.length < 2) return [];
+  const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal');
+  return curve.getPoints(Math.max(40, points.length * 16));
+}
+
+/* 그린 궤적을 일정 간격의 제어점으로 단순화 */
+function simplify(raw) {
+  const len = [0];
+  for (let i = 1; i < raw.length; i++) len.push(len[i - 1] + raw[i].distanceTo(raw[i - 1]));
+  const total = len[len.length - 1];
+  const n = Math.min(14, Math.max(2, Math.round(total / 0.22)));
+  const out = [];
+  let j = 0;
+  for (let k = 0; k <= n; k++) {
+    const target = total * k / n;
+    while (j < raw.length - 2 && len[j + 1] < target) j++;
+    const seg = len[j + 1] - len[j] || 1;
+    out.push(raw[j].clone().lerp(raw[j + 1], Math.min(1, Math.max(0, (target - len[j]) / seg))));
+  }
+  return out;
+}
+
+/* 현재 시점에서 본 곡선을 2D 선분 목록으로 (양끝은 길게 연장, 거의 닫힌 곡선은 닫음) */
+function buildCurve2D() {
+  const pts = curveSamples(cut.pts).map(toScreen);
+  if (pts.length < 2) return null;
+  const closed = Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]) < 25;
+  const P = pts.slice();
+  if (closed) {
+    P.push(P[0]);
+  } else {
+    const ext = (a, b) => {
+      const dx = a[0] - b[0], dy = a[1] - b[1], l = Math.hypot(dx, dy) || 1;
+      return [a[0] + dx / l * 5000, a[1] + dy / l * 5000];
+    };
+    P.unshift(ext(P[0], P[1]));
+    P.push(ext(P[P.length - 1], P[P.length - 2]));
+  }
+  const m = P.length - 1;
+  const c = { m, closed, ax: new Float32Array(m), ay: new Float32Array(m), dx: new Float32Array(m), dy: new Float32Array(m),
+              nx: new Float32Array(m), ny: new Float32Array(m), l2: new Float32Array(m) };
+  for (let i = 0; i < m; i++) {
+    const dx = P[i + 1][0] - P[i][0], dy = P[i + 1][1] - P[i][1], l = Math.hypot(dx, dy) || 1;
+    c.ax[i] = P[i][0]; c.ay[i] = P[i][1]; c.dx[i] = dx; c.dy[i] = dy;
+    c.nx[i] = -dy / l; c.ny[i] = dx / l; c.l2[i] = l * l || 1;
+  }
+  return c;
+}
+
+/* 곡선까지의 부호 있는 화면 거리(px) */
+function signedDist(c, px, py) {
+  let best = Infinity, bi = 0, bt = 0;
+  for (let i = 0; i < c.m; i++) {
+    let t = ((px - c.ax[i]) * c.dx[i] + (py - c.ay[i]) * c.dy[i]) / c.l2[i];
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const ex = px - (c.ax[i] + c.dx[i] * t), ey = py - (c.ay[i] + c.dy[i] * t);
+    const d2 = ex * ex + ey * ey;
+    if (d2 < best) { best = d2; bi = i; bt = t; }
+  }
+  let nx = c.nx[bi], ny = c.ny[bi];
+  if (bt <= 0) {
+    const k = bi > 0 ? bi - 1 : c.closed ? c.m - 1 : -1;
+    if (k >= 0) { nx += c.nx[k]; ny += c.ny[k]; }
+  } else if (bt >= 1) {
+    const k = bi < c.m - 1 ? bi + 1 : c.closed ? 0 : -1;
+    if (k >= 0) { nx += c.nx[k]; ny += c.ny[k]; }
+  }
+  const cx = c.ax[bi] + c.dx[bi] * bt, cy = c.ay[bi] + c.dy[bi] * bt;
+  return ((px - cx) * nx + (py - cy) * ny) >= 0 ? Math.sqrt(best) : -Math.sqrt(best);
+}
+
+/* 격자 전체를 훑어 돌 안쪽 복셀의 화면 부호/거리를 계산 */
+function scanVoxels(c, stride, visit) {
+  camera.updateMatrixWorld();
+  effect.updateMatrixWorld();
+  const e = new THREE.Matrix4().multiplyMatrices(camera.matrixWorldInverse, effect.matrixWorld).elements;
+  const P = camera.projectionMatrix.elements;
+  const W = WIDTH(), H = HEIGHT();
+  const field = effect.field, iso = effect.isolation;
+  const pxToCell = 2 * Math.tan(camera.fov * Math.PI / 360) / H * (HALF / 1.5);
+  for (let z = 0; z < RES; z += stride) for (let y = 0; y < RES; y += stride) for (let x = 0; x < RES; x += stride) {
+    const q = z * RES * RES + y * RES + x;
+    if (field[q] <= iso - 1) continue;
+    const lx = x / HALF - 1, ly = y / HALF - 1, lz = z / HALF - 1;
+    const vz = e[2] * lx + e[6] * ly + e[10] * lz + e[14];
+    if (vz >= -0.01) continue;
+    const vx = e[0] * lx + e[4] * ly + e[8] * lz + e[12];
+    const vy = e[1] * lx + e[5] * ly + e[9] * lz + e[13];
+    const px = (P[0] * vx / -vz + 1) / 2 * W, py = (1 - P[5] * vy / -vz) / 2 * H;
+    visit(q, x, y, z, signedDist(c, px, py), -vz * pxToCell);
+  }
+}
+
+/* 부피가 작은 쪽을 자동으로 잘라낼 쪽으로 정하고, 사용자가 뒤집을 수 있음 */
+function removeSign(c) {
+  const key = cut.version + '|' + camera.matrixWorld.elements.join(',') + '|' + cut.flip;
+  if (key !== cut.sideKey) {
+    cut.sideKey = key;
+    let pos = 0, neg = 0;
+    const iso = effect.isolation, field = effect.field;
+    scanVoxels(c, 3, (q, x, y, z, sd) => { if (field[q] > iso) { if (sd > 0) pos++; else neg++; } });
+    cut.autoSign = pos <= neg ? 1 : -1;
+  }
+  return cut.autoSign * (cut.flip ? -1 : 1);
+}
+
+function applyCut() {
+  if (cut.pts.length < 2) return false;
+  const c = buildCurve2D();
+  if (!c) return false;
+  const sign = removeSign(c);
+  const field = effect.field, iso = effect.isolation;
+  let removed = 0;
+  const updates = [];
+  scanVoxels(c, 1, (q, x, y, z, sd, cellsPerPx) => {
+    if (x < 1 || y < 1 || z < 1 || x > RES - 2 || y > RES - 2 || z > RES - 2) return;
+    const sc = sd * sign * cellsPerPx;
+    if (sc > -3) {
+      const target = iso - sc * 0.35; // sc == 0 에서 정확히 매끈한 절단면
+      if (target < field[q]) {
+        if (field[q] > iso && target <= iso) removed++;
+        updates.push(q, target);
+      }
+    }
+  });
+  if (removed === 0) return false;
+  for (let i = 0; i < updates.length; i += 2) field[updates[i]] = updates[i + 1];
+  refreshMesh();
+  return true;
+}
+
+function clearCut() {
+  cut.raw = null; cut.pts = []; cut.drag = -1; cut.flip = false; cut.version++;
+}
+
+function drawCutOverlay() {
+  octx.clearRect(0, 0, overlay.width, overlay.height);
+  if (tool !== 'cut') return;
+  octx.lineCap = 'round';
+  octx.lineJoin = 'round';
+  if (cut.raw && cut.raw.length > 1) {
+    octx.setLineDash([]);
+    octx.strokeStyle = 'rgba(217,48,37,.9)';
+    octx.lineWidth = 2.5;
+    octx.beginPath();
+    cut.raw.map(toScreen).forEach((p, i) => i ? octx.lineTo(p[0], p[1]) : octx.moveTo(p[0], p[1]));
+    octx.stroke();
+    return;
+  }
+  if (cut.pts.length < 2) return;
+  const samples = curveSamples(cut.pts).map(toScreen);
+  octx.setLineDash([8, 6]);
+  octx.strokeStyle = 'rgba(217,48,37,.95)';
+  octx.lineWidth = 2.5;
+  octx.beginPath();
+  samples.forEach((p, i) => i ? octx.lineTo(p[0], p[1]) : octx.moveTo(p[0], p[1]));
+  octx.stroke();
+  // 잘려 나갈 쪽 표시
+  const c = buildCurve2D();
+  if (c) {
+    const sign = removeSign(c);
+    octx.setLineDash([]);
+    octx.strokeStyle = 'rgba(217,48,37,.55)';
+    octx.lineWidth = 2;
+    const off = c.closed ? 0 : 1;
+    for (let i = off + 3; i < c.m - off; i += 6) {
+      const x = c.ax[i], y = c.ay[i];
+      octx.beginPath();
+      octx.moveTo(x, y);
+      octx.lineTo(x + c.nx[i] * sign * 16, y + c.ny[i] * sign * 16);
+      octx.stroke();
+    }
+  }
+  // 편집 핸들
+  octx.setLineDash([]);
+  cut.pts.forEach((p, i) => {
+    const [x, y] = toScreen(p);
+    octx.beginPath();
+    octx.arc(x, y, i === cut.drag ? 8 : 6, 0, Math.PI * 2);
+    octx.fillStyle = '#fff';
+    octx.fill();
+    octx.strokeStyle = '#1a73e8';
+    octx.lineWidth = 2.5;
+    octx.stroke();
+  });
+}
+
+function handleAt(x, y) {
+  let best = -1, bd = 14;
+  cut.pts.forEach((p, i) => {
+    const [sx, sy] = toScreen(p);
+    const d = Math.hypot(sx - x, sy - y);
+    if (d < bd) { bd = d; best = i; }
+  });
+  return best;
+}
+
+function cutPointer(e) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  return [e.clientX - rect.left, e.clientY - rect.top];
+}
+
+function pickAt(x, y) {
+  flushMesh();
+  raycaster.setFromCamera(new THREE.Vector2((x / WIDTH()) * 2 - 1, -(y / HEIGHT()) * 2 + 1), camera);
+  const hits = raycaster.intersectObject(effect);
+  return hits.length ? hits[0] : null;
 }
 
 /* ---------- 돌가루 파티클 ---------- */
@@ -418,21 +730,102 @@ function updateParticles() {
 /* ---------- 입력: 돌을 찍으면 조각, 빈 곳 드래그는 회전 ---------- */
 renderer.domElement.addEventListener('pointerdown', e => {
   if (tool === 'rotate') return; // 회전 모드는 OrbitControls에 맡김
+  if (tool === 'cut') {
+    if (cut.mode === 'rotate' || e.button !== 0) return; // 회전은 OrbitControls에 맡김
+    const [x, y] = cutPointer(e);
+    controls.enabled = false;
+    carving = true;
+    renderer.domElement.setPointerCapture(e.pointerId);
+    const h = handleAt(x, y);
+    if (h >= 0) { cut.drag = h; cut.raw = null; }
+    else { cut.drag = -1; cut.raw = [worldPointAt(x, y)]; cut.rawPx = [x, y]; }
+    return;
+  }
   const hit = pickStone(e);
   if (hit) {
     controls.enabled = false; // 이번 드래그는 조각
     carving = true;
+    lastHit = hit.point.clone();
     strike(e);
   }
 }, { capture: true });
 
+let lastHit = null;
+
+/* 도구 크기를 보여주는 표면 커서 링 */
+const cursor = new THREE.Mesh(
+  new THREE.RingGeometry(0.9, 1, 48),
+  new THREE.MeshBasicMaterial({ color: 0x1a73e8, side: THREE.DoubleSide, transparent: true, opacity: 0.85, depthTest: false })
+);
+cursor.renderOrder = 10;
+cursor.visible = false;
+scene.add(cursor);
+
+function updateCursor(e) {
+  if (carving || tool === 'rotate' || tool === 'cut') { cursor.visible = false; return; }
+  const hit = pickStone(e);
+  if (!hit) { cursor.visible = false; return; }
+  const n = hit.face.normal.clone().transformDirection(effect.matrixWorld);
+  cursor.position.copy(hit.point).addScaledVector(n, 0.004);
+  cursor.lookAt(hit.point.clone().add(n));
+  cursor.scale.setScalar(Math.max(toolRadius() / HALF * 1.5, 0.004));
+  cursor.visible = true;
+}
+renderer.domElement.addEventListener('pointermove', updateCursor);
+renderer.domElement.addEventListener('pointerleave', () => { cursor.visible = false; });
+
 renderer.domElement.addEventListener('pointermove', e => {
   if (!carving) return;
+  if (tool === 'cut') {
+    const [x, y] = cutPointer(e);
+    if (cut.drag >= 0) {
+      const hit = pickAt(x, y);
+      if (hit) cut.pts[cut.drag] = hit.point.clone();
+      else {
+        raycaster.setFromCamera(new THREE.Vector2((x / WIDTH()) * 2 - 1, -(y / HEIGHT()) * 2 + 1), camera);
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()), cut.pts[cut.drag]);
+        const p = raycaster.ray.intersectPlane(plane, new THREE.Vector3());
+        if (p) cut.pts[cut.drag] = p;
+      }
+      cut.version++;
+    } else if (cut.raw && Math.hypot(x - cut.rawPx[0], y - cut.rawPx[1]) > 3) {
+      cut.raw.push(worldPointAt(x, y));
+      cut.rawPx = [x, y];
+    }
+    return;
+  }
   if (tool === 'hammer') return; // 망치는 클릭 타격만
-  strike(e);
+  // 지나간 궤적 전체를 한 번에 도려내 끊김 없는 매끈한 선으로 새김
+  const hit = pickStone(e);
+  if (!hit) { lastHit = null; return; }
+  if (lastHit && tool !== 'polish') {
+    const [ax, ay, az] = worldToGrid(lastHit);
+    const [bx, by, bz] = worldToGrid(hit.point);
+    carveSegment(ax, ay, az, bx, by, bz);
+  } else if (lastHit) {
+    const step = Math.max(toolRadius() * 0.35, 0.5) * (1.5 / HALF);
+    const count = Math.min(Math.ceil(lastHit.distanceTo(hit.point) / step), 80);
+    for (let i = 1; i <= count; i++) {
+      const [gx, gy, gz] = worldToGrid(lastHit.clone().lerp(hit.point, i / count));
+      carveAt(gx, gy, gz);
+    }
+  } else {
+    strike(e);
+  }
+  lastHit = hit.point.clone();
 });
 
-function endStroke() {
+function endStroke(e) {
+  if (carving && tool === 'cut') {
+    if (cut.raw) {
+      let total = 0;
+      for (let i = 1; i < cut.raw.length; i++) total += cut.raw[i].distanceTo(cut.raw[i - 1]);
+      if (total > 0.15) { cut.pts = simplify(cut.raw); cut.flip = false; cut.version++; }
+      cut.raw = null;
+    }
+    cut.drag = -1;
+  }
+  lastHit = null;
   carving = false;
   controls.enabled = true;
 }
@@ -440,18 +833,61 @@ renderer.domElement.addEventListener('pointerup', endStroke);
 renderer.domElement.addEventListener('pointercancel', endStroke);
 renderer.domElement.addEventListener('pointerleave', endStroke);
 
+renderer.domElement.addEventListener('dblclick', e => {
+  if (tool !== 'cut' || cut.mode !== 'draw' || cut.pts.length < 2) return;
+  const [x, y] = cutPointer(e);
+  const h = handleAt(x, y);
+  if (h >= 0) {
+    if (cut.pts.length > 2) { cut.pts.splice(h, 1); cut.version++; }
+    return;
+  }
+  const samples = curveSamples(cut.pts);
+  let bi = -1, bd = 20;
+  samples.forEach((p, i) => {
+    const [sx, sy] = toScreen(p);
+    const d = Math.hypot(sx - x, sy - y);
+    if (d < bd) { bd = d; bi = i; }
+  });
+  if (bi < 0) return;
+  const idx = Math.min(cut.pts.length - 1, Math.max(1, Math.floor(bi / (samples.length - 1) * (cut.pts.length - 1)) + 1));
+  cut.pts.splice(idx, 0, samples[bi].clone());
+  cut.version++;
+});
+
+renderer.domElement.addEventListener('contextmenu', e => { if (tool === 'cut') e.preventDefault(); });
+const cutPanel = document.getElementById('cutPanel');
+document.querySelectorAll('[data-cutmode]').forEach(b => b.addEventListener('click', () => {
+  cut.mode = b.dataset.cutmode;
+  document.querySelectorAll('[data-cutmode]').forEach(x => x.classList.toggle('active', x === b));
+  wrap.classList.toggle('rotating', cut.mode === 'rotate');
+}));
+document.getElementById('cutFlip').addEventListener('click', () => { cut.flip = !cut.flip; });
+document.getElementById('cutClear').addEventListener('click', clearCut);
+document.getElementById('cutConfirm').addEventListener('click', () => {
+  if (cut.pts.length < 2) { flash('먼저 돌 위에 곡선을 그어주세요'); return; }
+  if (applyCut()) { clearCut(); flash('✂️ 돌을 잘라냈습니다'); }
+  else flash('잘려 나가는 부분이 없습니다. 곡선이나 시점을 조정해 보세요');
+});
+
 /* ---------- 도구 / 버튼 ---------- */
 document.querySelectorAll('.tool-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     tool = btn.dataset.tool;
-    wrap.classList.toggle('rotating', tool === 'rotate');
+    wrap.classList.toggle('rotating', tool === 'rotate' || (tool === 'cut' && cut.mode === 'rotate'));
+    cutPanel.classList.toggle('open', tool === 'cut');
+    controls.mouseButtons.RIGHT = tool === 'cut' ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
   });
 });
+const sizeValue = document.getElementById('sizeValue');
+function showSize() { sizeValue.textContent = '반경 ' + (toolRadius() / HALF * 1.5 * 100).toFixed(1) + ' (작을수록 섬세)'; }
 document.getElementById('sizeRange').addEventListener('input', e => {
   toolSize = Number(e.target.value);
+  showSize();
 });
+document.querySelectorAll('.tool-btn').forEach(b => b.addEventListener('click', showSize));
+showSize();
 /* ---------- 보관함 저장 / 불러오기 ---------- */
 let loadedId = null;        // 보관함에서 불러온 작품 id (덮어쓰기용)
 let loadedName = null;
@@ -536,11 +972,14 @@ window.addEventListener('resize', () => {
   camera.aspect = WIDTH() / HEIGHT();
   camera.updateProjectionMatrix();
   renderer.setSize(WIDTH(), HEIGHT());
+  sizeOverlay();
 });
 
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
+  flushMesh();
+  drawCutOverlay();
   updateParticles();
   renderer.render(scene, camera);
 }
@@ -552,12 +991,14 @@ async function init() {
   if (loadParam) {
     try {
       const rec = await getStone(Number(loadParam));
-      if (rec && rec.res === RES) {
-        effect.field.set(new Float32Array(rec.field));
+      if (rec) {
+        const raw = new Float32Array(rec.field);
+        effect.field.set(rec.res === RES ? raw : resampleField(raw, rec.res || 64));
         loadedId = rec.id;
         loadedName = rec.name;
         loadedCreatedAt = rec.createdAt;
         refreshMesh();
+        flushMesh();
         loaded = true;
         flash('🪨 「' + rec.name + '」 불러왔습니다');
       }
